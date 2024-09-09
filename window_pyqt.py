@@ -1,3 +1,11 @@
+"""
+window_pyqt.py: doplňující soubor pro vizualizaci stažených dat skriptem scraper.py
+
+author: Jiri Putik s dopomocí MS Copilot
+email: j.putik@gmail.com
+discord: peen_cz
+"""
+
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QListWidget, QSplitter, QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
