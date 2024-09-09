@@ -1,3 +1,12 @@
+"""
+scraper.py: třetí projekt do Engeto Online Python Akademie - Election scraper
+window_pyqt.py: doplňující soubor pro vizualizaci stažených dat
+
+author: Jiri Putik
+email: j.putik@gmail.com
+discord: peen_cz
+"""
+
 import requests
 from bs4 import BeautifulSoup
 from sys import platform, argv, exit
