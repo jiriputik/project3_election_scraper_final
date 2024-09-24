@@ -1,106 +1,129 @@
 """
-scraper.py: třetí projekt do Engeto Online Python Akademie - Election scraper
-window_pyqt.py: doplňující soubor pro vizualizaci stažených dat
+scraper.py: Third project for Engeto Online Python Academy - Election scraper
+window_pyqt.py: additional file for data visualisation
 
 author: Jiri Putik
 email: j.putik@gmail.com
 discord: peen_cz
 """
 
-import requests
-from bs4 import BeautifulSoup
-from sys import platform, argv, exit
-import csv
 import os
+import csv
 import time
+from sys import platform, argv, exit
+from requests import get
+from bs4 import BeautifulSoup
 from window_pyqt import run_app_window
 
 
-def check_system():                # zjistit systém -> win/něco jiného
+def check_system() -> bool:                # check user's system -> win/other
     return True if platform.startswith("win") else False
 
-def clear_screen():                 # smaž konzoli
+
+def clear_screen():                 # clear screen
     os.system('cls') if check_system else os.system('clear')
 
-def check_input_url(run_params: list) -> bool:    # správný url formát příklad: https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=2&xnumnuts=2101
-    '''
-    Vyhodnocení zadaného url, testuje zda pochází ze správného serveru a jestli vrací smysluplný obsah.
-    Vrací True/False
-    '''
-    if ( not (run_params[1].startswith("https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=")) or 
-        not (run_params[1][-4:]).isdigit() or
-        not (run_params[1][-15:-14]).isdigit() or
-        (requests.get(run_params[1]).status_code != 200) or
-        get_header(read_main_page(run_params[1]))[0].get_text().strip() == "Page not found!"):
+
+def check_input_url(run_params: list) -> bool:    # 
+    """
+    Check of entered url, testing the correct server and content.
+    Returns True/False
+    Example correct url: 
+    https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=2&xnumnuts=2101
+    """
+    url_prefix = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj="
+    if ( not (run_params[1].startswith(url_prefix)) \
+        or not (run_params[1][-4:]).isdigit() \
+        or not (run_params[1][-15:-14]).isdigit() \
+        or (get(run_params[1]).status_code != 200) \
+        or get_header(read_main_page(run_params[1]))[0].get_text().strip() == "Page not found!"):
         return True
     return False
 
+
 def read_params_from_line() -> list:
-    '''
-    Načtení předané konfigurace z příkazové řádky. 
-    Otestuje ¨správnost zadání a v případě úspěchu vypíše parametry předané z promptu.
+    """
+    Read of config from entered arguments when script is started,
+    like: "filename argument1 argument2"
+    Testing of correct input and print of entered parameters.
     EXAMPLE:
     filename.py "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=2&xnumnuts=2101"  file_output.csv
-    '''
+    """
     run_params = argv
-    if len(run_params) < 3:                     # test počtu parametrů
+    if len(run_params) < 3:         # testing of correct number of parameters
         print("Invalid number of parameters!")
         exit()
     elif check_input_url(run_params):           # test url
-        print("Bad format of requested url address or parameters entered in wrong order!")
+        print("Bad format of requested url address or \
+parameters entered in a wrong order!")
         exit()
     else:
-        print(f"Parameters to proceed:\nrequested url: {run_params[1]}\noutput file: {run_params[2]}")
+        print(f"Parameters to proceed:\n\
+requested url: {run_params[1]}\n\
+output file: {run_params[2]}")
     return (run_params[1],run_params[2])
 
-def read_main_page(url):            
-    '''
-    Načtení html stránky do soup objektu
-    '''
-    page_down = requests.get(url)
-    page_down_soup = BeautifulSoup(page_down.text, "html.parser")
-    return page_down_soup
+
+def read_main_page(url: str) -> BeautifulSoup:            
+    """
+    Connection to the server and download of the html page to the soup object
+    """
+    page_down = get(url)
+    return BeautifulSoup(page_down.text, "html.parser")
+
 
 def get_header(soup_page: BeautifulSoup) -> list:
-    '''
-    Získej a vrať získané info v headers h3m buď page not found nebo info o kraji/regionu, 
-    vrací list s výsledkem
-    '''
-    headers = soup_page.find_all("h3")[:2]
-    return(headers)
+    """
+    Get and return info from headers h3, 
+    either page not found or info about region, 
+    returns a list with the result.
+    """
+    return(soup_page.find_all("h3")[:2])
 
 
-def get_all_rows(soup_page: BeautifulSoup) -> list:       # vrať řádky z tabulky
+def get_all_rows(soup_page: BeautifulSoup) -> list:       
+    """
+    Returns all rows from the table with <tr> tag.
+    """
     return soup_page.find_all("tr")
 
-def grab_url_from_td(row: BeautifulSoup) -> str:           # vrať odkaz z buňky tabulky
+
+def grab_url_from_td(row: BeautifulSoup) -> str:           
+    """
+    Returns the url from the table's cell, <a> tag.
+    """
     return(row.a['href'])
 
+
 def separate_municipality(soup_page: BeautifulSoup) -> dict:    
-    '''
-    vrátí dict ve formě {město:[kód města, url na výsledky]}
-    '''
-    muni_url_start = "https://volby.cz/pls/ps2017nss/"      # fixní začátek každé url v tabulce, z tabulky jsou získány druhé části
+    """
+    Return dict with data in format dict:
+      {municipality_name:[municipality_code, results_url]}
+    """
+    # fixed first part of every url in the table:  
+    muni_url_start = "https://volby.cz/pls/ps2017nss/"      
     muni_dict_urls = dict()
+    # from table are acquired second parts of urls
     rows = get_all_rows(soup_page)
-    for _ in rows:
-        row = _.find("td")
+    for table_row in rows:
+        row = table_row.find("td")
         if row and row.text != "-":
             url = grab_url_from_td(row)
-            muni_dict_urls.update({(row.find_next_sibling("td").get_text()):[row.get_text(), (muni_url_start + url)]})  # zakomentovat pouze pro jednu obec
-            #muni_dict_urls = ({(row.find_next_sibling("td").get_text()):[row.get_text(), (muni_url_start + url)]})   # odkomentovat pouze pro jednu (poslední) obec
+            muni_dict_urls.update({(row.find_next_sibling("td").get_text()):[row.get_text(), (muni_url_start + url)]})  # comment this row to get only one municipality, for testing
+            #muni_dict_urls = ({(row.find_next_sibling("td").get_text()):[row.get_text(), (muni_url_start + url)]})   # uncomment this row to get only one municipality (the last), for testing
     return muni_dict_urls
 
+
 def get_election_data_from_url(location: str, given_url_list: list) -> dict:  
-    '''
-    Načti volební data z daných url pro jednotlivé obce
-    '''
-    print("#", end="", flush=True)      # zobrazení průběhu stahování dat, aby uživatel věděl, že se něco děje
-    statistics_dict = dict()
+    """
+    Get election data from given urls for each municipality.
+    """
+    # printing of symbol "#" in a row to represent data processing
+    print("#", end="", flush=True)      
     statistics_list = list()
     table_overall = read_main_page(given_url_list[1]).find("table")
     table_data = table_overall.find_all_next("table")
-    for index, overall_stats in enumerate(table_overall.find_all("td")):
+    for overall_stats in table_overall.find_all("td"):
         statistics_list.append(overall_stats.get_text().replace("\xa0",""))
     statistics_dict = {
         'location':location,
@@ -119,55 +142,68 @@ def get_election_data_from_url(location: str, given_url_list: list) -> dict:
                 statistics_dict.update({party_name:party_result})
     return statistics_dict
 
+
 def write_to_csv(stats_list:list, file:str):
-    '''
-    Zapiš předaná data ve formálu list dictů do souboru "file" ve formátu csv, 
-    první řádek csv souboru budou klíče převzaté z dict.
-    '''
+    """
+    Write the passed data in the format of list of dicts to the file "file" 
+    in csv format, the first row of the csv file will be the keys taken from
+    the dict.
+    """
     with open(file, mode="w", encoding="utf-8", newline="") as f:
             for index,data in enumerate(stats_list):
                 writer = csv.DictWriter(f, data.keys())
                 writer.writeheader() if index == 0 else ...
                 writer.writerow(data)
 
-def check_generate_graph():                     # požadavek na vizualizaci ano/ne
+
+def check_generate_graph() -> bool:      # user's choice to generate graphs
     visual = ""
     while visual not in ["Y", "Yes", "y", "N", "No", "n"]:
-        visual = input("Do you want to visualize downloaded and exported data? (Yes/No) ")
+        visual = input("Do you want to visualize downloaded and exported data?\
+ (Yes/No) ")
     return False if visual.casefold().startswith("n") else True
 
-def format_data_for_graph(stats:list) ->list:       
-    '''
-    Formátuj data pro grafický výstup:
-        - ořízni kód města
-        - ořízni počty hlasů (registered, envelopes, valid)
-        - vyhoď strany s výsledkem 0
-        - seřaď dle počtu hlasů
-    
-    Vrací výsledek: list dictů, kde dict je ve formátu dict {'lokalita':'město', 'strana1':počet, 'strana2':počet, 'strana3':počet..} 
-    '''
+
+def format_data_for_graph(stats:list) -> list:       
+    """
+    Format data for the graphical output:
+        - cut the municipality code
+        - cut additional statistics 
+          (registered, envelopes, valid numbers of votes)
+        - remove parties with a result of 0
+        - sort by total number of votes
+
+    Returns: list of dicts, where dict is in format:
+    {'location':'city', 'party1':votes, 'party2':votes, 'party3':votes..}    
+    """
     formatted_list = list()
     formatted_dict = dict()
-    votes = dict()
     for data_dict in stats:
-        formatted_dict['location'] = data_dict['location']          
-        votes = dict(list(data_dict.items())[5:])                                       # odfiltrování prvních pěti údajů (obec, kód, součty)
-        votes = {key: value for key, value in votes.items() if value > 0}               # odfiltrování stran s nulovým počtem hlasů
-        sorted_votes = (sorted(votes.items(), key=lambda item: item[1], reverse=True))  # setřídění podle počtu hlasů
+        formatted_dict['location'] = data_dict['location']     
+        # cut first five data sets (municipality, code, unused statistics):     
+        votes = dict(list(data_dict.items())[5:])                                       
+        # cut the parties with 0 votes:
+        votes = {key: value for key, value in votes.items() if value > 0}   
+        # sort the parties by total number of votes:           
+        sorted_votes = (sorted(votes.items(), 
+                               key=lambda item: item[1], reverse=True))  
         formatted_dict['votes'] = dict(sorted_votes)
         formatted_list.append(dict(formatted_dict))
     return formatted_list
 
 
-
-
 # main part
 
-# Data pro testování: (odkomentovat jeden z url a soubor s výstupem, spouštět bez parametrů)
+# Data for testing: 
+# uncomment one of urls and file with csv_output 
+# and run the script without any parameters.
 #url_page = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=7&xnumnuts=5103"
-#url_page = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=2&xnumnuts=2101" # test jiného kraje
-#url_page = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=12&xnumnuts=7103" # test jiného kraje
+# test some other region
+#url_page = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=2&xnumnuts=2101"
+# test some other region
+#url_page = "https://volby.cz/pls/ps2017nss/ps32?xjazyk=CZ&xkraj=12&xnumnuts=7103"
 # csv_output = "output.csv"
+
 
 if __name__ == "__main__":
     clear_screen()
@@ -177,7 +213,8 @@ if __name__ == "__main__":
     stats = list()
     region_page_soup = read_main_page(url_page)
     headers = (get_header(region_page_soup))
-    print(f"District: {headers[0].get_text()[6:]}Region: {headers[1].get_text()[7:]}")
+    print(f"District: {headers[0].get_text()[6:]}\
+Region: {headers[1].get_text()[7:]}")
     print("Getting requested data ...")
     municipalities_url_dict = separate_municipality(region_page_soup)
     for location,url_list in municipalities_url_dict.items():
@@ -186,9 +223,10 @@ if __name__ == "__main__":
     for i in range(10):
         time.sleep(0.2)
     
-    # odkomentovat tyto dva řádky pro kontrolní výpis do terminálu:
+    # uncomment the next rows for a control print to terminal (for testing)
     #for data in stats:  
-    #    print(f"Obec: {data['location']}, kód obce {data['code']}, voličů: {data['registered']}, obálek: {data['envelopes']}")
+    #    print(f"City: {data['location']}, city ID {data['code']}, \
+    #registered voters: {data['registered']}, envelopes: {data['envelopes']}")
     
     print(f"Writing data to csv file, name:{csv_output}") 
     write_to_csv(stats, csv_output)
@@ -196,13 +234,11 @@ if __name__ == "__main__":
     if check_generate_graph():
         normalized_stats = format_data_for_graph(stats)
         print("Opening the new window with a visualised data...")
-        run_app_window(normalized_stats)  # předání dat pro vykreslení grafu
+        # data handover to the window_pyqt.py for visualisation
+        run_app_window(normalized_stats)  
     else:
         print("Goodbye")
     
-
-
-
 
     # structure of a variable 'stats' is list of dicts
 
